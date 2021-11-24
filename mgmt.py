@@ -1,13 +1,20 @@
 import os
 import subprocess
 
-root_dir = os.getcwd()
+root_dir = input(
+    "Please type the path to your directory OR leave empty for current path:"
+    )
+if root_dir is "":
+    root_dir = os.getcwd()
 
+ignore = [
+    ".git"
+]
 
 def general(move_trailers, remove_nfo, print_mov, delete_mov):
     for current_dir_name in os.listdir(root_dir):
         current_dir_path = root_dir + '\\' + current_dir_name
-        if os.path.isdir(current_dir_path):
+        if os.path.isdir(current_dir_path) and current_dir_name not in ignore:
             print("\n" + current_dir_name + ":\n")
             #move
             if move_trailers or remove_nfo:
