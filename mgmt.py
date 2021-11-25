@@ -121,7 +121,6 @@ inpt = input("""
 5) Convert Trailers to .mp4
 6) No Trailers
 7) Remove dots
-
 """)
 print("\n")
 if "1" in inpt:
