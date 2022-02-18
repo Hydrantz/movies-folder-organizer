@@ -1,148 +1,264 @@
-import os
+import os, sys
 import subprocess
+import audio_codecs
 
-root_dir = input(
-    "Please type the path to your directory OR leave empty for current path:"
-    )
-if root_dir is "":
-    root_dir = os.getcwd()
 
 ignore = [
-    ".git"
+    ".git",
+    "mgmt.py"
 ]
 
-def general(move_trailers, remove_nfo, print_mov, delete_mov):
-    for current_dir_name in os.listdir(root_dir):
-        current_dir_path = root_dir + '\\' + current_dir_name
-        if os.path.isdir(current_dir_path) and current_dir_name not in ignore:
-            print("\n" + current_dir_name + ":\n")
-            #move
-            if move_trailers or remove_nfo:
-                if "1080p" in os.listdir(current_dir_path):
-                    fhd_path = current_dir_path + '\\1080p'
-                    for file in os.listdir(fhd_path):
-                        if ('-trailer.' in file and move_trailers) or (file[-4:] == ".nfo" and remove_nfo):
-                            os.remove(fhd_path + "\\" + file)
-            trailer_path = current_dir_path + '\\Trailers'
-            if move_trailers or print_mov or delete_mov:
-                if 'Trailers' not in os.listdir(current_dir_path):
-                    os.mkdir(trailer_path)
-                if move_trailers:
-                    for file in os.listdir(current_dir_path):
-                        current_file_path = current_dir_path + '\\' + file
-                        if not os.path.isdir(current_file_path):
-                            if '-trailer.' in file:
-                                if file not in os.listdir(trailer_path):
-                                    print("\t"+current_file_path + '--->' + trailer_path + '\\' + file)
-                                    os.rename(current_file_path, trailer_path + '\\' + file)
-                                else:
-                                    os.remove(current_file_path)
-                                    print('\tDeleting ' + current_file_path)
-                            elif file[-4:] == ".nfo":
-                                os.remove(current_file_path)
-                for trailerFile in os.listdir(trailer_path):
-                    if ".mov" in trailerFile:
-                        if print_mov:
-                            print("\t"+trailer_path + '\\' + trailerFile)
-                        if delete_mov:
-                            if len(os.listdir(trailer_path)) > 1:
-                                os.remove(trailer_path + '\\' + trailerFile)
-                            else:
-                                print("\t"+"No other trailer in "+current_dir_name)
+endpoint_folders = [
+    "1080p",
+    "Trailers",
+    "Subs",
+    "Extras"
+]
+
+global_state = {
+    "removed_dots": [],
+    "deleted_nfos": [],
+    "moved_trailers": [],
+    "no_trailers": [],
+    "all_movs": [],
+    "to_convert": [],
+    "converted_trailers": [],
+    "deleted_movs": [],
+    "all_dts": [],
+    "log": []
+    }
+
+def log(section: str, values: list):
+    global global_state
+    if section == "removed_dots":
+        global_state["log"].append("dots removed from '"+values[0]+"'")
+        global_state["removed_dots"].append(values[0])
+    elif section == "deleted_nfos":
+        global_state["log"].append("'"+values[0]+"' Deleted")
+        global_state["deleted_nfos"].append(values[0])
+    elif section == "move_trailers":
+        line = "'"+values[0] + "' moved to '" + values[1]+"'"
+        global_state["log"].append(line)
+        global_state["moved_trailers"].append(values[1])
+    elif section == "no_trailers":
+        global_state["log"].append("'"+values[0] + "' lacks trailers")
+        global_state["no_trailers"].append(values[0])
+    elif section == "convertion_succeed":
+        global_state["log"].append("'"+values[0] + "' converted to '" + values[1]+"'")
+        global_state["converted_trailers"].append(values[1])
+    elif section == "convertion_failed":
+        global_state["log"].append("converting '" + values[0] + "' Failed")
+    elif section == "mov_deleted":
+        global_state["log"].append("'"+values[0] + "' deleted")
+        global_state["deleted_movs"].append(values[0])
+    elif section == "mov_printed":
+        global_state["all_movs"].append(values[0])
+    elif section == "dts_found":
+        global_state["all_dts"].append(values[0])
 
 
-def no_trailer():
-    have_trailers = []
-    no_trailers = []
-    for movie_folder in os.listdir(root_dir):
-        cur_folder = root_dir+"\\"+movie_folder
-        if os.path.isdir(cur_folder):
-            if "Trailers" not in os.listdir(cur_folder):
-                no_trailers.append(movie_folder)
+def remove_dots(path: str):
+    folders = path.split("\\")
+    if "." in folders[-1]:
+        folders[-1] = folders[-1].replace(".", " ")
+        new_path = "\\".join(folders)
+        os.rename(path, new_path)
+        log("removed_dots", [new_path])
+        return new_path
+    else:
+        return path
+
+
+def delete_nfo(path: str):
+    if os.path.isfile(path) and path[-4:] == ".nfo":
+        os.remove(path)
+        log("deleted_nfos", [path])
+
+
+def move_trailers(file_path: str):
+    if '-trailer.' in file_path:
+        folders = file_path.split("\\")
+        root_path = "\\".join(folders[:-1])
+        file_name = folders[-1]
+        trailer_path = root_path + "\\Trailers"
+        final_file_path = trailer_path+"\\"+file_name
+        if not "Trailers" in os.listdir(root_path):
+            os.mkdir(trailer_path)
+        else:
+            if file_name in os.listdir(trailer_path):
+                os.remove(file_path)
+                log("move_trailers", [file_path, final_file_path])
+                return True
+        os.rename(file_path, final_file_path)
+        log("move_trailers", [file_path, final_file_path])
+        return True
+
+
+def no_trailer(path: str):
+    if path.split("\\")[-1] not in endpoint_folders:
+        def check_further(path: str):
+            no_trailer_files = True
+            for file in os.listdir(path):
+                if os.path.isfile and "-trailer" in file:
+                    no_trailer_files = False
+                    break
+            if no_trailer_files:
+                log("no_trailers", [path])
+        if "Trailers" not in os.listdir(path):
+            check_further(path)
+        elif not os.listdir(path+"\\Trailers"):
+            check_further(path)
+
+
+def convert_trailers(dir_path: str, filename: str):
+    if filename[-3:] != "mp4":
+        try:
+            format = ''
+            if ".flv" in filename.lower():
+                _format = ".flv"
+            if ".mp4" in filename.lower():
+                _format = ".mp4"
+            if ".avi" in filename.lower():
+                _format = ".avi"
+            if ".mov" in filename.lower():
+                _format = ".mov"
+                
+            input_file = os.path.join(dir_path, filename)
+            output_file = os.path.join(dir_path, filename.replace(_format, ".mp4"))
+            subprocess.call(['ffmpeg', '-i', input_file, output_file])
+            log("convertion_succeed", [input_file, output_file])
+        except:
+            log("convertion_failed", [input_file])
+
+
+def manage_movs(path:str, delete_mov: bool, print_mov: bool):
+    if path[-3:] == "mov":
+        if delete_mov:
+            os.remove(path)
+            log("mov_deleted", [path])
+        else:
+            log("mov_printed", [path])
+
+
+def main_loop(root: str, flags: dict):
+    if "remove_dots" in flags:
+        root = remove_dots(root)
+    dir_name = root.split("\\")[-1]
+    dir_has_files = False
+    for item_name in os.listdir(root):
+        item_path = root + "\\" + item_name
+        if os.path.isdir(item_path):
+            if os.listdir(item_path):
+                main_loop(item_path, flags)
             else:
-                files = cur_folder+"\\Trailers"
-                if not os.listdir(files):
-                    no_trailers.append(movie_folder)
-                else:
-                    have_trailers.append(movie_folder)
+                pass
+            continue
+        else:
+            if item_name not in ignore:
+                dir_has_files = True  
+            if flags["delete_nfos"]:
+                delete_nfo(item_path)
 
-    print("Have trailers: "+str(len(have_trailers))+"\n\t"+"\n\t".join(have_trailers))
-    print("\n\n")
-    print("lacking trailers: "+str(len(no_trailers))+"\n\t"+"\n\t".join(no_trailers))
+            # different functionality for different folder names
+            if dir_name == "1080p":
+                if flags["move_trailers"] and '-trailer.' in item_name:
+                    os.remove(item_path)
+                    continue
+            elif dir_name == "Trailers":
+                if flags["convert_trailers"]:
+                    convert_trailers(root, item_name)
+                if flags["delete_movs"] or flags["print_movs"]:
+                    manage_movs(item_path, flags["delete_movs"], flags["print_movs"])
+            else:
+                if flags["move_trailers"]:
+                    if move_trailers(item_path):
+                        continue
 
+            if flags["print_dts"]:
+                if audio_codecs.is_dts(item_path):
+                    log("dts_found", [item_path])
 
-def remove_dots():
-    for movie_folder in os.listdir(root_dir):
-        cur_folder = root_dir+"\\"+movie_folder
-        if os.path.isdir(cur_folder):
-            os.rename(cur_folder, root_dir+"\\"+movie_folder.replace(".", " "))
-
-
-def convert_trailers():
-    for movie_folder in os.listdir(root_dir):
-        cur_folder = root_dir+"\\"+movie_folder
-        if os.path.isdir(cur_folder):
-            if "Trailers" in os.listdir(cur_folder) and os.path.isdir(cur_folder+"\\Trailers"):
-
-                src = cur_folder+"\\Trailers"
-                dst = cur_folder+"\\Trailers"
-
-                for root, dirs, filenames in os.walk(src, topdown=False):
-                    print(filenames)
-                    for filename in filenames:
-                        if filename[:-3]+"mp4" not in filenames:
-                            print('[INFO] 1', filename)
-                            try:
-                                _format = ''
-                                if ".flv" in filename.lower():
-                                    _format = ".flv"
-                                if ".mp4" in filename.lower():
-                                    _format = ".mp4"
-                                if ".avi" in filename.lower():
-                                    _format = ".avi"
-                                if ".mov" in filename.lower():
-                                    _format = ".mov"
-
-                                input_file = os.path.join(root, filename)
-                                print('[INFO] 1', input_file)
-                                output_file = os.path.join(dst, filename.replace(_format, ".mp4"))
-                                subprocess.call(['ffmpeg', '-i', input_file, output_file])
-                            except:
-                                print("A conversion exception occurred")
+    if dir_has_files and flags["no_trailer"]:
+        no_trailer(root)
 
 
-move_trailers = remove_nfo = print_mov = delete_mov = False
+def main():
+    global global_state
+    root_dir = None
+    if len(sys.argv)>1:
+        root_dir = sys.argv[1]
+    else:
+        # root_dir = input(
+        # "Please type the path to your directory OR leave empty for current path:\n"
+        # )
+        root_dir = r"D:\temp\movies"
+        if root_dir == "" or root_dir is None:
+            root_dir = os.getcwd()
+            print("no path was entered. starting at "+root_dir)
 
-inpt = input("""
-1) Move Trailers
-2) Remove .nfo
-3) Print .mov
-4) Delete .mov
-5) Convert Trailers to .mp4
-6) No Trailers
-7) Remove dots
-""")
-print("\n")
-if "1" in inpt:
-    move_trailers = True
-if "2" in inpt:
-    remove_nfo = True
-if "3" in inpt:
-    print_mov = True
-if "4" in inpt:
-    delete_mov = True
+    print(root_dir)
 
-if move_trailers or remove_nfo or print_mov or delete_mov:
-    general(move_trailers, remove_nfo, print_mov, delete_mov)
+    flags = {
+        "remove_dots": False,
+        "delete_nfos": False,
+        "move_trailers": False,
+        "no_trailer": False,
+        "convert_trailers": False,
+        "delete_movs": False,
+        "print_movs": False,
+        "print_dts": False
+    }
 
-if "5" in inpt:
-    convert_trailers()
+    inpt = input("""
+    1) Remove dots
+    2) Delete .nfo Files
+    3) Move Trailers
+    4) No Trailers
+    5) Convert Trailers to .mp4
+    6) Delete .mov Files
+    7) Print .mov Files
+    8) Print DTS Files
 
-if "7" in inpt:
-    remove_dots()
+    """)
+    print("\n")
+    if "1" in inpt:
+        flags["remove_dots"] = True
+    if "2" in inpt:
+        flags["delete_nfos"] = True
+    if "3" in inpt:
+        flags["move_trailers"] = True
+    if "4" in inpt:
+        flags["no_trailer"] = True
+    if "5" in inpt:
+        flags["convert_trailers"] = True
+    if "6" in inpt:
+        flags["delete_movs"] = True
+    if "7" in inpt:
+        flags["print_movs"] = True
+    if "8" in inpt:
+        flags["print_dts"] = True
 
-if "6" in inpt:
-    no_trailer()
+    main_loop(root_dir, flags)
 
-print("\n\nFinished")
-input()
+    if flags["print_movs"]:
+        for item in global_state["all_movs"]:
+            print(item)
+        print("")
+    if flags["no_trailer"]:
+        for item in global_state["no_trailers"]:
+            print(item)
+        print("")
+    if flags["print_dts"]:
+        for item in global_state["all_dts"]:
+            print(item)
+        print("")
+
+    print("\n\nFinished")
+
+    print(global_state)
+
+    input()
+
+
+if __name__ == "__main__":
+    main()
