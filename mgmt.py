@@ -188,10 +188,9 @@ def main():
     if len(sys.argv)>1:
         root_dir = sys.argv[1]
     else:
-        # root_dir = input(
-        # "Please type the path to your directory OR leave empty for current path:\n"
-        # )
-        root_dir = r"D:\temp\movies"
+        root_dir = input(
+        "Please type the path to your directory OR leave empty for current path:\n"
+        )
         if root_dir == "" or root_dir is None:
             root_dir = os.getcwd()
             print("no path was entered. starting at "+root_dir)
