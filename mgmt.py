@@ -12,7 +12,13 @@ endpoint_folders = [
     "1080p",
     "Trailers",
     "Subs",
-    "Extras"
+    "Extras",
+    "Behind The Scenes",
+    "Plex Versions",
+    "Featurettes",
+    "Shorts",
+    "Deleted Scenes",
+    "Soundtrack"
 ]
 
 global_state = {
@@ -41,8 +47,8 @@ def log(section: str, values: list):
         global_state["log"].append(line)
         global_state["moved_trailers"].append(values[1])
     elif section == "no_trailers":
-        global_state["log"].append("'"+values[0] + "' lacks trailers")
-        global_state["no_trailers"].append(values[0])
+        global_state["no_trailers"].append("'"+values[0] + "' lacks trailers")
+        global_state["log"].append(values[0])
     elif section == "convertion_succeed":
         global_state["log"].append("'"+values[0] + "' converted to '" + values[1]+"'")
         global_state["converted_trailers"].append(values[1])
@@ -195,8 +201,6 @@ def main():
             root_dir = os.getcwd()
             print("no path was entered. starting at "+root_dir)
 
-    print(root_dir)
-
     flags = {
         "remove_dots": False,
         "delete_nfos": False,
@@ -253,8 +257,6 @@ def main():
         print("")
 
     print("\n\nFinished")
-
-    print(global_state)
 
     input()
 
