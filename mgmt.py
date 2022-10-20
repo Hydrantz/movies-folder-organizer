@@ -147,7 +147,8 @@ def manage_movs(path:str, delete_mov: bool, print_mov: bool):
 
 
 def main_loop(root: str, flags: dict):
-    if "remove_dots" in flags:
+    print(root)
+    if flags["remove_dots"]:
         root = remove_dots(root)
     dir_name = root.split("\\")[-1]
     dir_has_files = False
